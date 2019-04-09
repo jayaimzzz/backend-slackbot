@@ -17,7 +17,6 @@ import os
 from slackclient import SlackClient
 import re
 import requests
-import json
 import string
 
 
@@ -25,6 +24,7 @@ BOT_USERNAME = os.environ.get("SLACK_BOT_USER")
 BOT_USER_TOKEN = os.environ.get("SLACK_BOT_TOKEN")
 BOT_NAME = 'magic8bot'
 BOT_CHAN = '#magic-eight-test'
+MW_API = 'https://dictionaryapi.com/api/v3/references/thesaurus/json/'
 MERRIAM_WEBSTER_API_KEY = os.environ.get("MERRIAM_WEBSTER_API_KEY")
 
 int_ = 2  # loop pause interval (seconds)
@@ -53,27 +53,15 @@ def command_loop(bot):
     """Process incoming bot commands"""
     command, channel = bot.parse_bot_commands(bot.slack_client.rtm_read())
     if command:
-        longest_word = get_longest_word(command)
-        synonyms = get_synonyms(longest_word)
-        print(synonyms)
-        if command.endswith("?"):
-            data = fetch_yes_no()
-            text = data.get("answer")
-            print(synonyms)
-            img = data.get("image")
-            attachments = [{"title": text, "image_url": img}]
-            bot.slack_client.api_call(
-                "chat.postMessage",
-                channel=channel,
-                text=command,
-                attachments=attachments
-            )
+        if command == "help":
+            bot.help(channel)
+            pass
+        elif command == "exit":
+            pass
+        elif command == "ping":
+            pass
         else:
-            message = 'Questions end in a "?". Please use one.'
-            bot.post_message(message, channel)
-        if synonyms:
-            thesaurus_message = "Other words for *{}* are {}.".format(longest_word, synonyms)
-            bot.post_message(thesaurus_message, channel)
+            bot.answer_question_and_get_synonyms(command, channel)
 
 
 def signal_handler(sig_num, frame):
@@ -82,6 +70,7 @@ def signal_handler(sig_num, frame):
     if sig_num == 2:
         global run_flag
         run_flag = False
+
 
 def fetch_yes_no():
     '''Use the Yes No api to fetch a yes or no and image'''
@@ -92,7 +81,7 @@ def fetch_yes_no():
     except requests.exceptions.RequestException as err:
         print(err)
         return None
-    
+
 
 def get_longest_word(text):
     '''Find the longest word out a string of text'''
@@ -105,10 +94,13 @@ def get_longest_word(text):
     result = ''.join(ch for ch in result if ch not in exclude)
     return result
 
+
 def get_synonyms(word):
     '''use a thesaurus API to find all synonyms'''
     try:
-        r = requests.get("https://dictionaryapi.com/api/v3/references/thesaurus/json/{}?key={}".format(word, MERRIAM_WEBSTER_API_KEY))
+        key = MERRIAM_WEBSTER_API_KEY
+        url = "{}{}?key={}".format(MW_API, word, key)
+        r = requests.get(url)
         data = r.json()
         try:
             synonyms = data[0].get("meta").get("syns")[0]
@@ -147,11 +139,9 @@ class SlackBot:
     def parse_bot_commands(self, slack_events):
         # print(slack_events)
         for event in slack_events:
-            if event.get("type") == "message" and not "subtype" in event:
+            if event.get("type") == "message" and "subtype" not in event:
                 user_id, message = self.parse_direct_mention(event.get("text"))
-                print(user_id, self.bot_id)
                 if user_id == self.bot_id:
-                    print("inside logic")
                     return message, event.get("channel")
         return None, None
 
@@ -175,15 +165,39 @@ class SlackBot:
     def __exit__(self, type, value, traceback):
         """Implement this method to make this a context manager"""
         pass
+    def help(self, channel):
+        message = '''
+        Magic Eight Bot can answer all your yes or no questions. Simply end your question with a "?". 
+        Use the "exit" keyword to shut me down.
+        Use the "ping" keyword to check my status
+        I am also an excellent thesaurus
+        '''
+        self.post_message(message, channel)
 
-    def post_message(self, msg, channel):
+    def post_message(self, msg, channel, attachments=None):
         """Sends a message to a Slack Channel"""
         self.slack_client.api_call(
             "chat.postMessage",
             channel=channel,
-            text=msg
+            text=msg,
+            attachments=attachments
         )
-       
+
+    def answer_question_and_get_synonyms(self, command, channel):
+        word = get_longest_word(command)
+        synonyms = get_synonyms(word)
+        if command.endswith("?"):
+            data = fetch_yes_no()
+            text = data.get("answer")
+            img = data.get("image")
+            attachments = [{"title": text, "image_url": img}]
+            self.post_message(command, channel, attachments)
+        else:
+            message = 'Questions end in a "?". Please use one.'
+            self.post_message(message, channel)
+        if synonyms:
+            t_message = "Other words for *{}* are {}.".format(word, synonyms)
+            self.post_message(t_message, channel)
 
     def handle_command(self, raw_cmd, channel):
         """Parses a raw command string from the bot"""
