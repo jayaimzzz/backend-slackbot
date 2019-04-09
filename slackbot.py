@@ -16,12 +16,16 @@ import logging
 import os
 from slackclient import SlackClient
 import re
+import requests
+import json
+import string
 
 
 BOT_USERNAME = os.environ.get("SLACK_BOT_USER")
 BOT_USER_TOKEN = os.environ.get("SLACK_BOT_TOKEN")
 BOT_NAME = 'magic8bot'
 BOT_CHAN = '#magic-eight-test'
+MERRIAM_WEBSTER_API_KEY = os.environ.get("MERRIAM_WEBSTER_API_KEY")
 
 int_ = 2  # loop pause interval (seconds)
 run_flag = True
@@ -48,7 +52,28 @@ def config_logger():
 def command_loop(bot):
     """Process incoming bot commands"""
     command, channel = bot.parse_bot_commands(bot.slack_client.rtm_read())
-    print(command, channel)
+    if command:
+        longest_word = get_longest_word(command)
+        synonyms = get_synonyms(longest_word)
+        print(synonyms)
+        if command.endswith("?"):
+            data = fetch_yes_no()
+            text = data.get("answer")
+            print(synonyms)
+            img = data.get("image")
+            attachments = [{"title": text, "image_url": img}]
+            bot.slack_client.api_call(
+                "chat.postMessage",
+                channel=channel,
+                text=command,
+                attachments=attachments
+            )
+        else:
+            message = 'Questions end in a "?". Please use one.'
+            bot.post_message(message, channel)
+        if synonyms:
+            thesaurus_message = "Other words for *{}* are {}.".format(longest_word, synonyms)
+            bot.post_message(thesaurus_message, channel)
 
 
 def signal_handler(sig_num, frame):
@@ -57,6 +82,44 @@ def signal_handler(sig_num, frame):
     if sig_num == 2:
         global run_flag
         run_flag = False
+
+def fetch_yes_no():
+    '''Use the Yes No api to fetch a yes or no and image'''
+    try:
+        r = requests.get("https://yesno.wtf/api")
+        data = r.json()
+        return data
+    except requests.exceptions.RequestException as err:
+        print(err)
+        return None
+    
+
+def get_longest_word(text):
+    '''Find the longest word out a string of text'''
+    result = ""
+    text = text.split()
+    for word in text:
+        if len(word) > len(result):
+            result = word
+    exclude = set(string.punctuation)
+    result = ''.join(ch for ch in result if ch not in exclude)
+    return result
+
+def get_synonyms(word):
+    '''use a thesaurus API to find all synonyms'''
+    try:
+        r = requests.get("https://dictionaryapi.com/api/v3/references/thesaurus/json/{}?key={}".format(word, MERRIAM_WEBSTER_API_KEY))
+        data = r.json()
+        try:
+            synonyms = data[0].get("meta").get("syns")[0]
+            if len(synonyms) > 1:
+                synonyms[-1] = "and " + synonyms[-1]
+            return ", ".join(synonyms)
+        except:
+            return None
+    except requests.exceptions.RequestException as err:
+        print(err)
+        return None
 
 
 class SlackBot:
@@ -113,9 +176,14 @@ class SlackBot:
         """Implement this method to make this a context manager"""
         pass
 
-    def post_message(self, msg, chan=BOT_CHAN):
+    def post_message(self, msg, channel):
         """Sends a message to a Slack Channel"""
-        pass
+        self.slack_client.api_call(
+            "chat.postMessage",
+            channel=channel,
+            text=msg
+        )
+       
 
     def handle_command(self, raw_cmd, channel):
         """Parses a raw command string from the bot"""
