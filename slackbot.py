@@ -191,6 +191,8 @@ class SlackBot:
 
     def exit(self, channel):
         self.post_message(f'{self.bot_name} is exiting. Goodbye.', channel)
+        global run_flag
+        run_flag = False
 
     def post_message(self, msg, channel, attachments=None):
         """Sends a message to a Slack Channel"""
