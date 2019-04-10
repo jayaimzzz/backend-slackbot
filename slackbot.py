@@ -8,7 +8,6 @@ Get these from the Slack account settings that you are connecting to.
    BOT_USER_ID = 'U20981S736'
    BOT_USER_TOKEN = 'xoxb-106076235608-AbacukynpGahsicJqugKZC'
 """
-__author__ = 'jenjam aka jhoelzer and jayaimzzz'
 
 import time
 import signal
@@ -18,14 +17,20 @@ from slackclient import SlackClient
 import re
 import requests
 import string
+from dotenv import load_dotenv
 
+__author__ = 'jenjam aka jhoelzer and jayaimzzz'
 
+load_dotenv()
+
+SLACK_BOT_ICON = 'https://cdn.guidingtech.com/media/assets/WordPress-Import/2012/10/Smiley-Thumbnail.png'
 BOT_USERNAME = os.environ.get("SLACK_BOT_USER")
 BOT_USER_TOKEN = os.environ.get("SLACK_BOT_TOKEN")
 BOT_NAME = 'magic8bot'
-BOT_CHAN = '#magic-eight-test'
+BOT_CHAN = 'CCD7MHJD8'
 MW_API = 'https://dictionaryapi.com/api/v3/references/thesaurus/json/'
 MERRIAM_WEBSTER_API_KEY = os.environ.get("MERRIAM_WEBSTER_API_KEY")
+
 
 int_ = 2  # loop pause interval (seconds)
 run_flag = True
@@ -55,11 +60,10 @@ def command_loop(bot):
     if command:
         if command == "help":
             bot.help(channel)
-            pass
         elif command == "exit":
-            pass
+            bot.exit(channel)
         elif command == "ping":
-            pass
+            bot.ping(channel)
         else:
             bot.answer_question_and_get_synonyms(command, channel)
 
@@ -107,10 +111,11 @@ def get_synonyms(word):
             if len(synonyms) > 1:
                 synonyms[-1] = "and " + synonyms[-1]
             return ", ".join(synonyms)
-        except:
+        except Exception:
+            logger.error(f"No synonyms found for {word}")
             return None
     except requests.exceptions.RequestException as err:
-        print(err)
+        logger.error(err)
         return None
 
 
@@ -121,6 +126,7 @@ class SlackBot:
         self.slack_client = SlackClient(bot_user_token)
         self.bot_name = BOT_NAME
         self.bot_id = self.get_bot_id()
+        self.start_time = time.time()
 
         if self.bot_id is None:
             exit("Error, could not find " + str(self.bot_name))
@@ -165,14 +171,26 @@ class SlackBot:
     def __exit__(self, type, value, traceback):
         """Implement this method to make this a context manager"""
         pass
+
     def help(self, channel):
         message = '''
-        Magic Eight Bot can answer all your yes or no questions. Simply end your question with a "?". 
+        Magic Eight Bot can answer all your yes or no questions.
+        Simply end your question with a "?".
         Use the "exit" keyword to shut me down.
-        Use the "ping" keyword to check my status
-        I am also an excellent thesaurus
+        Use the "ping" keyword to check my status.
+        I am also an excellent thesaurus.
         '''
         self.post_message(message, channel)
+
+    def ping(self, channel):
+        stime = time.strftime(
+            '%Y-%m-%d %H:%M:%S', time.localtime(self.start_time)
+            )
+        message = f"{self.bot_name} has been running since {stime}."
+        self.post_message(message, channel)
+
+    def exit(self, channel):
+        self.post_message(f'{self.bot_name} is exiting. Goodbye.', channel)
 
     def post_message(self, msg, channel, attachments=None):
         """Sends a message to a Slack Channel"""
@@ -180,7 +198,8 @@ class SlackBot:
             "chat.postMessage",
             channel=channel,
             text=msg,
-            attachments=attachments
+            attachments=attachments,
+            icon_url=SLACK_BOT_ICON
         )
 
     def answer_question_and_get_synonyms(self, command, channel):
@@ -210,7 +229,8 @@ def main():
     signal.signal(signal.SIGTERM, signal_handler)
     bot = SlackBot(BOT_USER_TOKEN)
     if bot.slack_client.rtm_connect(with_team_state=False):
-        print("{} connected and running!".format(bot.bot_name))
+        logger.info("{} connected and running!".format(bot.bot_name))
+        bot.post_message(f"{bot.bot_name} is online.", BOT_CHAN)
         while run_flag:
             command_loop(bot)
             time.sleep(int_)
