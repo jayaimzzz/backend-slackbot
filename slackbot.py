@@ -23,7 +23,7 @@ __author__ = 'jenjam aka jhoelzer and jayaimzzz'
 
 load_dotenv()
 
-SLACK_BOT_ICON = 'https://cdn.guidingtech.com/media/assets/WordPress-Import/2012/10/Smiley-Thumbnail.png'
+SLACK_BOT_ICON = 'https://raw.githubusercontent.com/jayaimzzz/backend-slackbot/dev/images/magic-8-bot.png'
 BOT_USERNAME = os.environ.get("SLACK_BOT_USER")
 BOT_USER_TOKEN = os.environ.get("SLACK_BOT_TOKEN")
 BOT_NAME = 'magic8bot'
