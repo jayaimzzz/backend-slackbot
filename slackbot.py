@@ -24,6 +24,7 @@ __author__ = 'jenjam aka jhoelzer and jayaimzzz'
 load_dotenv()
 
 SLACK_BOT_ICON = 'https://raw.githubusercontent.com/jayaimzzz/backend-slackbot/dev/images/magic-8-bot.png'
+MW_ICON = "https://dictionaryapi.com/images/info/branding-guidelines/MWLogo_LightBG_120x120_2x.png"
 BOT_USERNAME = os.environ.get("SLACK_BOT_USER")
 BOT_USER_TOKEN = os.environ.get("SLACK_BOT_TOKEN")
 BOT_NAME = 'magic8bot'
@@ -194,14 +195,14 @@ class SlackBot:
         global run_flag
         run_flag = False
 
-    def post_message(self, msg, channel, attachments=None):
+    def post_message(self, msg, channel, attachments=None, icon_url=SLACK_BOT_ICON):
         """Sends a message to a Slack Channel"""
         self.slack_client.api_call(
             "chat.postMessage",
             channel=channel,
             text=msg,
             attachments=attachments,
-            icon_url=SLACK_BOT_ICON
+            icon_url=icon_url
         )
 
     def answer_question_and_get_synonyms(self, command, channel):
@@ -209,16 +210,17 @@ class SlackBot:
         synonyms = get_synonyms(word)
         if command.endswith("?"):
             data = fetch_yes_no()
-            text = data.get("answer")
+            text = data.get("answer").title()
             img = data.get("image")
             attachments = [{"title": text, "image_url": img}]
             self.post_message(command, channel, attachments)
         else:
-            message = 'Questions end in a "?". Please use one.'
+            message = 'To ask a question, use a "?" at the end.'
             self.post_message(message, channel)
         if synonyms:
             t_message = "Other words for *{}* are {}.".format(word, synonyms)
-            self.post_message(t_message, channel)
+            attachments = [{"title": "Thesaurus", "text": t_message, "footer": "Synonyms provided by Marriam-Webster", "footer_icon": MW_ICON}]
+            self.post_message("", channel, attachments)
 
     def handle_command(self, raw_cmd, channel):
         """Parses a raw command string from the bot"""
